@@ -1,0 +1,6 @@
+
+PyQt6
+keyboard
+googletrans==3.1.0a0
+pywin32
+pyinstaller

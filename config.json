@@ -1,0 +1,18 @@
+{
+    "languages": {
+        "English": "en",
+        "Hebrew": "he",
+        "Spanish": "es",
+        "French": "fr",
+        "German": "de",
+        "Russian": "ru",
+        "Arabic": "ar",
+        "Chinese": "zh-cn",
+        "Japanese": "ja"
+    },
+    "default_source": "Hebrew",
+    "default_target": "English",
+    "hotkey": "ctrl+shift+h",
+    "theme": "light",
+    "cache_size": 100
+}
