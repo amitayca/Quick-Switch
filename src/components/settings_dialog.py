@@ -1,20 +1,20 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QGroupBox, QFormLayout,
                              QComboBox, QListWidget, QPushButton, QDialogButtonBox,
                              QHBoxLayout, QMessageBox, QTableWidget, QTableWidgetItem,
-                             QLabel, QLineEdit, QCheckBox, QSpinBox, QInputDialog, QListWidgetItem)
+                             QLabel, QLineEdit, QCheckBox, QSpinBox, QInputDialog, QListWidgetItem,
+                             QTabWidget, QRadioButton, QButtonGroup, QWidget, QColorDialog)
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QPalette, QColor
-from PyQt6.QtWidgets import QWidget
 import re
-
+from ..utils.context_manager import ContextKeywordManager
 from ..utils.language_manager import LanguageManager
-
 from ..utils.dictionary_utils import ContextAnalyzer, SuggestionDialog
 from ..utils.context_manager import ContextKeywordManager
 from .language_dialogs import LanguageSelectionDialog
 from ..utils.constants import (POSITION_CURSOR, POSITION_CENTER, POSITION_LAST,
                              INSERT_DIRECT, INSERT_CLIPBOARD, TARGET_LANGUAGES)
 from ..utils.theme_utils import get_dialog_theme_styles
+from ..utils.styles import ACCENT_COLORS
 from googletrans.constants import LANGUAGES
 
 class PersonalDictionaryEditor(QDialog):
@@ -464,7 +464,6 @@ class AISettingsDialog(QDialog):
         self.settings.setValue("ai_daily_limit", self.daily_limit.value())
         self.accept()
 
-
 class EnhancedSettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -486,10 +485,18 @@ class EnhancedSettingsDialog(QDialog):
         self.apply_theme()
 
     def setup_ui(self):
-        """Setup settings dialog UI with proper language name display"""
+        """Setup settings dialog UI with tabs for better organization"""
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
+        # Create a tab widget for better organization
+        tab_widget = QTabWidget()
+        
+        # Tab 1: Languages
+        language_tab = QWidget()
+        language_layout = QVBoxLayout(language_tab)
+        language_layout.setSpacing(10)
+        
         # Default languages group with proper code handling
         default_group = QGroupBox("Default Languages")
         default_layout = QFormLayout()
@@ -497,12 +504,20 @@ class EnhancedSettingsDialog(QDialog):
 
         # Setup source language combo
         self.default_from = QComboBox()
-        # Use language names from language manager
+        
+        # Get language names and ensure Auto Detect is first
+        auto_name = self.language_manager.get_language_name("auto")
         source_langs = []
-        for code in self.language_manager.get_all_languages().values():
-            source_langs.append(self.language_manager.get_language_name(code))
-        source_langs = sorted(source_langs)
-        self.default_from.addItems(source_langs)
+        
+        # Add languages (excluding Auto Detect)
+        for code in sorted(self.language_manager.get_all_languages().values()):
+            if code != "auto":
+                name = self.language_manager.get_language_name(code)
+                source_langs.append(name)
+        
+        # Insert Auto Detect at the beginning
+        all_source_langs = [auto_name] + source_langs
+        self.default_from.addItems(all_source_langs)
         
         # Get current default or fallback to "auto"
         current_from = self.settings.value("default_from", "auto")
@@ -525,7 +540,7 @@ class EnhancedSettingsDialog(QDialog):
         default_layout.addRow("Default From:", self.default_from)
         default_layout.addRow("Default To:", self.default_to)
         default_group.setLayout(default_layout)
-        layout.addWidget(default_group)
+        language_layout.addWidget(default_group)
 
         # Language Management group
         lang_group = QGroupBox("Language Management")
@@ -564,9 +579,88 @@ class EnhancedSettingsDialog(QDialog):
 
         lang_layout.addWidget(self.lang_list)
         lang_group.setLayout(lang_layout)
-        layout.addWidget(lang_group)
+        language_layout.addWidget(lang_group)
+        
+        language_tab.setLayout(language_layout)
+        tab_widget.addTab(language_tab, "Languages")
+        
+        # Tab 2: Appearance
+        appearance_tab = QWidget()
+        appearance_layout = QVBoxLayout(appearance_tab)
+        
+        # Theme selection
+        theme_group = QGroupBox("Theme")
+        theme_layout = QVBoxLayout()
+        
+        # Theme radio buttons
+        theme_buttons_layout = QHBoxLayout()
+        self.dark_mode_radio = QRadioButton("Dark Theme")
+        self.light_mode_radio = QRadioButton("Light Theme")
+        
+        # Set initial selection based on current theme
+        dark_mode = self.settings.value("dark_mode", False, bool)
+        self.dark_mode_radio.setChecked(dark_mode)
+        self.light_mode_radio.setChecked(not dark_mode)
+        
+        theme_buttons_layout.addWidget(self.dark_mode_radio)
+        theme_buttons_layout.addWidget(self.light_mode_radio)
+        theme_layout.addLayout(theme_buttons_layout)
 
-        # Window Behavior group
+        # Accent color selection
+        color_label = QLabel("Accent Color:")
+
+        # Create color selector grid
+        color_layout = QHBoxLayout()
+        color_layout.setSpacing(8)
+        color_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.color_group = QButtonGroup(self)
+        self.color_group.setExclusive(True)
+
+        # Get current accent color from settings - ADD THIS LINE
+        current_color = self.settings.value("accent_color", "Blue")
+
+        # Add color swatches
+        for i, (name, colors) in enumerate(ACCENT_COLORS.items()):
+            # Create a color sample button
+            color_btn = QPushButton()
+            color_btn.setFixedSize(24, 24)
+            color_hex = colors["dark" if dark_mode else "light"]
+            
+            # Set button style to show the color
+            color_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color_hex};
+                    border: 2px solid {"#555" if dark_mode else "#ddd"};
+                    border-radius: 12px;
+                }}
+                QPushButton:checked {{
+                    border: 2px solid {"#fff" if dark_mode else "#000"};
+                }}
+            """)
+            
+            color_btn.setCheckable(True)
+            color_btn.setChecked(name == current_color)
+            color_btn.setToolTip(name)
+            
+            # Store the color name as property
+            color_btn.setProperty("colorName", name)
+            
+            self.color_group.addButton(color_btn, i)
+            color_layout.addWidget(color_btn)
+        
+        theme_layout.addWidget(color_label)
+        theme_layout.addLayout(color_layout)
+        
+        # Custom color button (as a placeholder for now)
+        custom_color_btn = QPushButton("Custom Color...")
+        custom_color_btn.setEnabled(False)  # Disabled for now
+        theme_layout.addWidget(custom_color_btn)
+        
+        theme_group.setLayout(theme_layout)
+        appearance_layout.addWidget(theme_group)
+        
+        # Window behavior settings
         window_group = QGroupBox("Window Behavior")
         window_layout = QFormLayout()
         window_layout.setContentsMargins(10, 15, 10, 10)
@@ -588,8 +682,15 @@ class EnhancedSettingsDialog(QDialog):
         window_layout.addRow("Window Position:", self.position_combo)
         window_layout.addRow("Text Insertion:", self.insert_combo)
         window_group.setLayout(window_layout)
-        layout.addWidget(window_group)
-
+        appearance_layout.addWidget(window_group)
+        
+        appearance_tab.setLayout(appearance_layout)
+        tab_widget.addTab(appearance_tab, "Appearance")
+        
+        # Tab 3: Advanced
+        advanced_tab = QWidget()
+        advanced_layout = QVBoxLayout(advanced_tab)
+        
         # AI Translation section
         ai_group = QGroupBox("AI Translation")
         ai_layout = QVBoxLayout()
@@ -600,22 +701,104 @@ class EnhancedSettingsDialog(QDialog):
         ai_layout.addWidget(self.ai_settings_btn)
         
         ai_group.setLayout(ai_layout)
-        layout.addWidget(ai_group)
+        advanced_layout.addWidget(ai_group)
 
         # Dictionary button
         self.dict_btn = QPushButton("Personal Dictionary")
         self.dict_btn.setMinimumHeight(32)
         self.dict_btn.clicked.connect(self.show_dictionary)
-        layout.addWidget(self.dict_btn)
+        advanced_layout.addWidget(self.dict_btn)
+        
+        advanced_tab.setLayout(advanced_layout)
+        tab_widget.addTab(advanced_tab, "Advanced")
+        
+        layout.addWidget(tab_widget)
 
         # Dialog buttons
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | 
             QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self.save_settings)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def preview_accent_color(self, is_checked):
+        """Preview the selected accent color immediately"""
+        if is_checked and self.parent:
+            button = self.color_group.checkedButton()
+            if button:
+                color_name = button.property("colorName")
+                if color_name:
+                    # Update parent's theme immediately
+                    self.settings.setValue("accent_color", color_name)
+                    self.parent.apply_theme()
+
+    def select_custom_color(self):
+        """Open color picker for custom color selection"""
+        dark_mode = self.parent.dark_mode if hasattr(self.parent, 'dark_mode') else False
+        
+        color_dialog = QColorDialog(self)
+        color_dialog.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, False)
+        
+        # Get current accent color for initial selection
+        current_color_name = self.settings.value("accent_color", "Blue")
+        current_color = QColor(ACCENT_COLORS[current_color_name]["dark" if dark_mode else "light"])
+        color_dialog.setCurrentColor(current_color)
+        
+        # Apply dialog theme
+        from ..utils.theme_utils import get_dialog_theme_styles
+        color_dialog.setStyleSheet(get_dialog_theme_styles(dark_mode))
+        
+        if color_dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_color = color_dialog.selectedColor()
+            if selected_color.isValid():
+                # Convert to hex
+                hex_color = selected_color.name()
+                
+                # Store custom color in settings
+                self.settings.setValue("custom_color_dark", hex_color)
+                self.settings.setValue("custom_color_light", hex_color)
+                
+                # Update ACCENT_COLORS dictionary temporarily
+                ACCENT_COLORS["Custom"] = {
+                    "dark": hex_color,
+                    "light": hex_color
+                }
+                
+                # Create and select a new button for the custom color
+                for btn in self.color_group.buttons():
+                    if btn.property("colorName") == "Custom":
+                        self.color_group.removeButton(btn)
+                        btn.deleteLater()
+                
+                # Create new custom button
+                custom_btn = QPushButton()
+                custom_btn.setFixedSize(24, 24)
+                custom_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {hex_color};
+                        border: 2px solid {"#555" if dark_mode else "#ddd"};
+                        border-radius: 12px;
+                    }}
+                    QPushButton:checked {{
+                        border: 2px solid {"#fff" if dark_mode else "#000"};
+                    }}
+                """)
+                custom_btn.setCheckable(True)
+                custom_btn.setChecked(True)
+                custom_btn.setToolTip("Custom")
+                custom_btn.setProperty("colorName", "Custom")
+                custom_btn.toggled.connect(self.preview_accent_color)
+                
+                # Add to button group and layout
+                self.color_group.addButton(custom_btn)
+                self.custom_color_layout.addWidget(custom_btn)
+                
+                # Apply the color immediately
+                self.settings.setValue("accent_color", "Custom")
+                if self.parent:
+                    self.parent.apply_theme()
 
     def get_language_name(self, code):
         """Helper to get language name from code using LanguageManager"""
@@ -638,10 +821,11 @@ class EnhancedSettingsDialog(QDialog):
                 return code
                 
         return None  # Return None if not found
-        
-    def accept(self):
-        """Save settings with proper language code handling and ensure main window update"""
+    
+    def save_settings(self):
+        """Save settings with proper language code handling and theme preferences"""
         try:
+            # Save language settings
             enabled_codes = set()  # Use set to prevent duplicates
             
             for i in range(self.lang_list.count()):
@@ -649,17 +833,7 @@ class EnhancedSettingsDialog(QDialog):
                 if item.checkState() == Qt.CheckState.Checked:
                     # Get the ISO code from item data
                     iso_code = item.data(Qt.ItemDataRole.UserRole)
-                    language_name = item.text()
-                    
-                    if iso_code:
-                        enabled_codes.add(iso_code)  # Store the ISO code
-                        print(f"Settings: Adding language: {language_name} (ISO code: {iso_code})")
-                    else:
-                        # Fallback: try to get code from name
-                        code = self.language_manager.get_language_code(language_name)
-                        if code != "auto":  # Don't include auto in enabled languages
-                            enabled_codes.add(code)
-                            print(f"Settings: Fallback: Adding language: {language_name} (ISO code: {code})")
+                    enabled_codes.add(iso_code)
             
             # Add required languages
             enabled_codes.add("en")
@@ -667,7 +841,6 @@ class EnhancedSettingsDialog(QDialog):
             
             # Convert to sorted list for consistent storage
             enabled_codes_list = sorted(list(enabled_codes))
-            print(f"Settings: Saving ISO codes: {enabled_codes_list}")
             
             # Save language codes
             self.settings.setValue("enabled_languages", enabled_codes_list)
@@ -680,9 +853,6 @@ class EnhancedSettingsDialog(QDialog):
             from_code = self.language_manager.get_language_code(from_name)
             to_code = self.language_manager.get_language_code(to_name)
             
-            print(f"Settings: Setting default from '{from_name}' -> '{from_code}'")
-            print(f"Settings: Setting default to '{to_name}' -> '{to_code}'")
-            
             self.settings.setValue("default_from", from_code)
             self.settings.setValue("default_to", to_code)
             
@@ -690,23 +860,35 @@ class EnhancedSettingsDialog(QDialog):
             self.settings.setValue("window_position", self.position_combo.currentText())
             self.settings.setValue("insertion_method", self.insert_combo.currentText())
             
+            # Save theme preferences
+            self.settings.setValue("dark_mode", self.dark_mode_radio.isChecked())
+            
+            # Save accent color if selected
+            selected_color_btn = self.color_group.checkedButton()
+            if selected_color_btn:
+                color_name = selected_color_btn.property("colorName")
+                if color_name:
+                    self.settings.setValue("accent_color", color_name)
+            
             # Ensure settings are written to disk
             self.settings.sync()
             
-            # Force translation window to update its selectors
-            if hasattr(self.parent, 'update_language_selectors'):
-                print("Settings: Triggering parent window language selector update")
-                self.parent.update_language_selectors()
-            else:
-                print("Settings: Parent window doesn't have update_language_selectors method")
+            # Apply theme if parent window exists
+            if self.parent:
+                dark_mode = self.dark_mode_radio.isChecked()
+                if dark_mode != self.parent.dark_mode:
+                    self.parent.dark_mode = dark_mode
+                    self.parent.apply_theme()
+                
+                # Force translation window to update its selectors
+                if hasattr(self.parent, 'update_language_selectors'):
+                    self.parent.update_language_selectors()
             
-            super().accept()
+            self.accept()
         except Exception as e:
-            print(f"Error in settings accept: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            QMessageBox.warning(self, "Settings Error", f"Error saving settings: {str(e)}")
             self.settings.setValue("enabled_languages", ["en", "he"])
-            super().accept()
+            self.accept()
 
     def filter_languages(self, text):
         """Filter language list based on search text"""
@@ -721,7 +903,7 @@ class EnhancedSettingsDialog(QDialog):
         dialog.exec()
 
     def apply_theme(self):
-        """Apply consistent theme styling to settings dialog"""
+        """Apply consistent theme styling to settings dialog with proper text colors"""
         dark_mode = self.parent.dark_mode if hasattr(self.parent, 'dark_mode') else False
         
         base_style = """
@@ -746,6 +928,27 @@ class EnhancedSettingsDialog(QDialog):
             }
             QLabel {
                 min-height: 20px;
+            }
+            QTabWidget::pane {
+                border: 1px solid """ + ("#444" if dark_mode else "#dee2e6") + """;
+                border-radius: 4px;
+            }
+            QTabBar::tab {
+                padding: 6px 12px;
+                margin-right: 2px;
+                border: 1px solid """ + ("#444" if dark_mode else "#dee2e6") + """;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                color: """ + ("#ffffff" if dark_mode else "#212529") + """;
+            }
+            QTabBar::tab:selected {
+                background-color: """ + ("#2d2d2d" if dark_mode else "#ffffff") + """;
+                color: """ + ("#ffffff" if dark_mode else "#212529") + """;
+            }
+            QTabBar::tab:!selected {
+                background-color: """ + ("#1a1a1a" if dark_mode else "#f5f5f5") + """;
+                color: """ + ("#cccccc" if dark_mode else "#495057") + """;
             }
         """
         
@@ -772,6 +975,9 @@ class EnhancedSettingsDialog(QDialog):
                 background-color: """ + ("#404040" if dark_mode else "#e9ecef") + """;
             }
             QLabel {
+                color: """ + ("#ffffff" if dark_mode else "#212529") + """;
+            }
+            QRadioButton {
                 color: """ + ("#ffffff" if dark_mode else "#212529") + """;
             }
         """
