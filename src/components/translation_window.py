@@ -208,7 +208,7 @@ class TranslationWindow(QMainWindow):
             self.update_compact_language_buttons()
 
     def update_translation(self):
-        """Handle translation with proper personal dictionary integration"""
+        """Handle translation with personal dictionary integration"""
         # Get input text based on current mode
         if self.window_mode == WINDOW_MODE_COMPACT:
             text = self.compact_input.text().strip()
@@ -235,35 +235,61 @@ class TranslationWindow(QMainWindow):
             if context != "General":
                 self.show_context_notification(context)
             
-            # First do the base translation
+            # Get standard Google translation first
             translator = Translator()
             translation = translator.translate(text, src=from_lang, dest=to_lang)
             translated_text = translation.text
             
-            # Now check for dictionary entries and apply them
-            replacements = {}
+            print(f"Original text: {text}")
+            print(f"Google translation: {translated_text}")
+            print(f"Detected context: {context}")
             
-            # Check the identified context's dictionary
+            # Build a list of terms to check in each relevant context
+            terms_to_check = []
+            
+            # Add context-specific translations
             if context in self.context_manager.contexts:
                 context_dict = self.context_manager.contexts[context]["translations"]
-                for original, replacement in context_dict.items():
-                    if original.lower() in text.lower():
-                        replacements[original] = replacement
+                for term, custom in context_dict.items():
+                    # Only add terms that appear in the original text
+                    if term.lower() in text.lower():
+                        terms_to_check.append((term, custom))
+                        print(f"Found context term to replace: {term} -> {custom}")
             
-            # Also check the General context
-            if "General" in self.context_manager.contexts and context != "General":
+            # Add General context translations
+            if context != "General" and "General" in self.context_manager.contexts:
                 general_dict = self.context_manager.contexts["General"]["translations"]
-                for original, replacement in general_dict.items():
-                    if original.lower() in text.lower() and original not in replacements:
-                        replacements[original] = replacement
+                for term, custom in general_dict.items():
+                    # Only add terms that appear in the original text and aren't already included
+                    if term.lower() in text.lower() and not any(term.lower() == t.lower() for t, _ in terms_to_check):
+                        terms_to_check.append((term, custom))
+                        print(f"Found general term to replace: {term} -> {custom}")
             
-            # Apply all replacements to the translated text
-            if replacements:
-                import re
-                for original, replacement in replacements.items():
-                    # Use case-insensitive replacement
-                    pattern = re.compile(re.escape(original), re.IGNORECASE)
-                    translated_text = pattern.sub(replacement, translated_text)
+            # Apply replacements
+            if terms_to_check:
+                for original_term, custom_translation in terms_to_check:
+                    try:
+                        # Get direct translation of just this term
+                        term_translation = translator.translate(original_term, src=from_lang, dest=to_lang).text
+                        print(f"Term '{original_term}' translates to '{term_translation}'")
+                        
+                        # Perform a direct string replacement first
+                        old_text = translated_text
+                        translated_text = translated_text.replace(term_translation, custom_translation)
+                        
+                        # If that didn't work, try case-insensitive replacement
+                        if old_text == translated_text:
+                            import re
+                            pattern = re.compile(re.escape(term_translation), re.IGNORECASE)
+                            translated_text = pattern.sub(custom_translation, translated_text)
+                            print(f"Used case-insensitive replacement for '{term_translation}' -> '{custom_translation}'")
+                        else:
+                            print(f"Replaced '{term_translation}' with '{custom_translation}'")
+                        
+                    except Exception as e:
+                        print(f"Error replacing term '{original_term}': {str(e)}")
+            
+            print(f"Final translation: {translated_text}")
             
             # Set the final translated text
             if self.window_mode == WINDOW_MODE_COMPACT:
@@ -274,6 +300,8 @@ class TranslationWindow(QMainWindow):
         
         except Exception as e:
             error_msg = f"Translation error: {str(e)}"
+            print(f"Translation error: {str(e)}")
+            
             if self.window_mode == WINDOW_MODE_COMPACT:
                 self.compact_preview.setPlainText(error_msg)
             else:

@@ -41,7 +41,7 @@ Quick Translate is a desktop application providing real-time translation capabil
 ## Known Issues and Bugs
 
 ### 1. Personal Dictionary
-- **Bug**: Keywords in the personal dictionary are detected, but translations aren't applied correctly. Context identification works, but the actual text replacement in the translation doesn't function as expected.
+- **Bug**: Keywords in the personal dictionary are detected and translations are applied correctly. Context identification works and the actual text replacement in the translation does function as expected. Maybe we need to add to the dictionary the languages we translate from and to and it will give suggtions based on our translation to how to translate to other languages. for name i.g.
 
 ### 2. Theme Management
 - **Bug**: Accent color changes don't apply immediately after accepting the settings dialog. Changes only become visible after switching between dark/light modes.
