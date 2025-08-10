@@ -61,17 +61,17 @@ class EnhancedTranslationManager(QObject):
             
         # Look for matches in translated text
         for original_word, translation in context_translations.items():
-            # Find potential matches using fuzzy matching
-            positions = self.find_word_positions(translated_text, original_word)
-            
+            # Find potential matches using fuzzy matching against the translation
+            positions = self.find_word_positions(translated_text, translation)
+
             for start_pos, end_pos in positions:
                 match_text = translated_text[start_pos:end_pos]
                 confidence = SequenceMatcher(
-                    None, 
-                    match_text.lower(), 
-                    original_word.lower()
+                    None,
+                    match_text.lower(),
+                    translation.lower()
                 ).ratio()
-                
+
                 if confidence >= self.suggestion_threshold:
                     suggestions.append(TranslationSuggestion(
                         original_word=match_text,
